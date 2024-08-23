@@ -40,15 +40,23 @@ func None[T any]() Optional[T] {
 	return Optional[T]{}
 }
 
+// Get returns a value of type T (either the held value, or the zero value of
+// T), and a boolean indicating if the value was held.
+func (o *Optional[T]) Get() (T, bool) {
+	return o.value, o.isset
+}
+
 // HasValue indicates whether a value is held.
 func (o *Optional[T]) HasValue() bool {
 	return o.isset
 }
 
-// Value returns a value of type T (either the held value, or the zero value of
-// T), and a boolean indicating if the value was held.
-func (o *Optional[T]) Value() (T, bool) {
-	return o.value, o.isset
+// Value returns the held value of type T, or panics if no value is held.
+func (o *Optional[T]) Value() T {
+	if !o.isset {
+		panic("Optional[%T].Value() called with no held value")
+	}
+	return o.value
 }
 
 // ValueOr returns a value of type T, either the held value or fallback if no
