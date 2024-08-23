@@ -34,9 +34,12 @@ func requireOptionalHasValue[T any](
 ) {
 	require.True(t, maybe.HasValue())
 
-	have, ok := maybe.Value()
+	have, ok := maybe.Get()
 	require.True(t, ok)
 	require.Equal(t, want, have)
+	require.NotPanics(t, func() {
+		require.Equal(t, want, maybe.Value())
+	})
 }
 
 func TestSome(t *testing.T) {
@@ -53,6 +56,15 @@ func TestSome(t *testing.T) {
 func TestNone(t *testing.T) {
 	none := optional.None[bool]()
 	require.False(t, none.HasValue())
+
+	x, ok := none.Get()
+	require.False(t, ok)
+	require.Zero(t, x)
+	require.Equal(t, false, none.ValueOr(false))
+	require.Equal(t, true, none.ValueOr(true))
+	require.Panics(t, func() {
+		none.Value()
+	})
 }
 
 func TestOptional_HasValue(t *testing.T) {
@@ -68,18 +80,30 @@ func TestOptional_HasValue(t *testing.T) {
 
 func TestOptional_Value(t *testing.T) {
 	var opt optional.Optional[bool]
+	require.Panics(t, func() {
+		opt.Value()
+	})
 
-	value, ok := opt.Value()
+	opt = optional.Some(false)
+	require.NotPanics(t, func() {
+		require.False(t, opt.Value())
+	})
+}
+
+func TestOptional_Get(t *testing.T) {
+	var opt optional.Optional[bool]
+
+	value, ok := opt.Get()
 	require.False(t, ok)
 	require.Zero(t, value)
 
 	opt = optional.None[bool]()
-	value, ok = opt.Value()
+	value, ok = opt.Get()
 	require.False(t, ok)
 	require.Zero(t, value)
 
 	opt = optional.Some(false)
-	value, ok = opt.Value()
+	value, ok = opt.Get()
 	require.True(t, ok)
 	require.False(t, value)
 }
