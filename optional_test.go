@@ -121,11 +121,30 @@ func TestOptional_ValueOr(t *testing.T) {
 
 func TestOptional_ValueOrFunc(t *testing.T) {
 	var opt optional.Optional[int]
-	require.Equal(t, 123, opt.ValueOrFunc(func() int { return 123 }))
+	require.Equal(t, 123, opt.ValueOrElse(func() int { return 123 }))
 
 	opt = optional.None[int]()
-	require.Equal(t, 234, opt.ValueOrFunc(func() int { return 234 }))
+	require.Equal(t, 234, opt.ValueOrElse(func() int { return 234 }))
 
 	opt = optional.Some(345)
-	require.Equal(t, 345, opt.ValueOrFunc(func() int { return -1 }))
+	require.Equal(t, 345, opt.ValueOrElse(func() int { return -1 }))
+}
+
+func TestOptional_Map(t *testing.T) {
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = give.Map(func(x int) int { return x * 2 })
+		)
+		require.False(t, have.HasValue())
+	})
+
+	t.Run("some", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.Map(func(x int) int { return x * 2 })
+		)
+		require.True(t, have.HasValue())
+		require.Equal(t, give.Value()*2, have.Value())
+	})
 }
