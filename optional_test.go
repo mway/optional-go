@@ -27,21 +27,6 @@ import (
 	"go.mway.dev/optional"
 )
 
-func requireOptionalHasValue[T any](
-	t *testing.T,
-	want T,
-	maybe optional.Optional[T],
-) {
-	require.True(t, maybe.HasValue())
-
-	have, ok := maybe.Get()
-	require.True(t, ok)
-	require.Equal(t, want, have)
-	require.NotPanics(t, func() {
-		require.Equal(t, want, maybe.Value())
-	})
-}
-
 func TestSome(t *testing.T) {
 	requireOptionalHasValue(t, true, optional.Some(true))
 	requireOptionalHasValue(t, false, optional.Some(false))
@@ -55,7 +40,8 @@ func TestSome(t *testing.T) {
 
 func TestNone(t *testing.T) {
 	none := optional.None[bool]()
-	require.False(t, none.HasValue())
+	require.False(t, none.IsSome())
+	require.True(t, none.IsNone())
 
 	x, ok := none.Get()
 	require.False(t, ok)
@@ -67,26 +53,33 @@ func TestNone(t *testing.T) {
 	})
 }
 
-func TestOptional_HasValue(t *testing.T) {
-	var opt optional.Optional[bool]
-	require.False(t, opt.HasValue())
-
-	opt = optional.None[bool]()
-	require.False(t, opt.HasValue())
-
-	opt = optional.Some(false)
-	require.True(t, opt.HasValue())
-}
-
-func TestOptional_Value(t *testing.T) {
-	var opt optional.Optional[bool]
-	require.Panics(t, func() {
-		opt.Value()
+func TestOptional_Filter(t *testing.T) {
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = give.Filter(func(x int) bool { return x > 0 })
+		)
+		require.False(t, have.IsSome())
+		require.True(t, have.IsNone())
 	})
 
-	opt = optional.Some(false)
-	require.NotPanics(t, func() {
-		require.False(t, opt.Value())
+	t.Run("some predicate returns true", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.Filter(func(x int) bool { return x > 0 })
+		)
+		require.True(t, have.IsSome())
+		require.False(t, have.IsNone())
+		require.Equal(t, give.Value(), have.Value())
+	})
+
+	t.Run("some predicate returns false", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.Filter(func(x int) bool { return x%2 == 0 })
+		)
+		require.False(t, have.IsSome())
+		require.True(t, have.IsNone())
 	})
 }
 
@@ -106,6 +99,225 @@ func TestOptional_Get(t *testing.T) {
 	value, ok = opt.Get()
 	require.True(t, ok)
 	require.False(t, value)
+}
+
+func TestOptional_IsNone(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
+		opt := optional.Some(true)
+		require.False(t, opt.IsNone())
+	})
+
+	t.Run("none", func(t *testing.T) {
+		var opt optional.Optional[bool]
+		require.True(t, opt.IsNone())
+
+		opt = optional.None[bool]()
+		require.True(t, opt.IsNone())
+	})
+}
+
+func TestOptional_IsNoneOr(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
+		opt := optional.Some(true)
+		require.False(t, opt.IsNoneOr(func(bool) bool {
+			return false
+		}))
+		require.True(t, opt.IsNoneOr(func(x bool) bool {
+			return x
+		}))
+	})
+
+	t.Run("none", func(t *testing.T) {
+		require.NotPanics(t, func() {
+			opt := optional.None[bool]()
+			require.True(t, opt.IsNoneOr(nil))
+			require.True(t, opt.IsNoneOr(func(bool) bool {
+				panic("never called")
+			}))
+		})
+	})
+}
+
+func TestOptional_IsSome(t *testing.T) {
+	t.Run("none", func(t *testing.T) {
+		var opt optional.Optional[bool]
+		require.False(t, opt.IsSome())
+
+		opt = optional.None[bool]()
+		require.False(t, opt.IsSome())
+	})
+
+	t.Run("some", func(t *testing.T) {
+		opt := optional.Some(true)
+		require.True(t, opt.IsSome())
+	})
+}
+
+func TestOptional_IsSomeAnd(t *testing.T) {
+	t.Run("none", func(t *testing.T) {
+		opt := optional.None[int]()
+		require.False(t, opt.IsSomeAnd(func(int) bool {
+			return true
+		}))
+		require.NotPanics(t, func() {
+			require.False(t, opt.IsSomeAnd(nil))
+		})
+	})
+
+	t.Run("some", func(t *testing.T) {
+		opt := optional.Some(123)
+		require.True(t, opt.IsSomeAnd(func(int) bool {
+			return true
+		}))
+		require.False(t, opt.IsSomeAnd(func(int) bool {
+			return false
+		}))
+		require.Panics(t, func() {
+			opt.IsSomeAnd(nil)
+		})
+	})
+}
+
+func TestOptional_Map(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.Map(func(x int) int { return x * 2 })
+		)
+		require.True(t, have.IsSome())
+		require.Equal(t, give.Value()*2, have.Value())
+	})
+
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = give.Map(func(x int) int { return x * 2 })
+		)
+		require.True(t, have.IsNone())
+	})
+}
+
+func TestOptional_MapOr(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.MapOr(0, func(x int) int { return x * 2 })
+		)
+		require.Equal(t, give.Value()*2, have)
+	})
+
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = give.MapOr(123, func(x int) int { return x * 2 })
+		)
+		require.Equal(t, 123, have)
+	})
+}
+
+func TestOptional_MapOrElse(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.MapOrElse(
+				func() int { return 999 },
+				func(x int) int { return x * 2 },
+			)
+		)
+		require.Equal(t, 246, have)
+	})
+
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = give.MapOrElse(
+				func() int { return 123 },
+				func(x int) int { return x * 2 },
+			)
+		)
+		require.Equal(t, 123, have)
+	})
+}
+
+func TestOptional_Or(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.Or(optional.Some(456))
+		)
+		require.True(t, have.IsSome())
+		require.Equal(t, give.Value(), have.Value())
+	})
+
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = give.Or(optional.Some(123))
+		)
+		require.True(t, have.IsSome())
+		require.Equal(t, 123, have.Value())
+	})
+}
+
+func TestOptional_OrElse(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.OrElse(func() optional.Optional[int] {
+				return optional.Some(456)
+			})
+		)
+		require.True(t, have.IsSome())
+		require.Equal(t, give.Value(), have.Value())
+	})
+
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = give.OrElse(func() optional.Optional[int] {
+				return optional.Some(123)
+			})
+		)
+		require.True(t, have.IsSome())
+		require.Equal(t, 123, have.Value())
+	})
+}
+
+func TestOptional_Swap(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.Swap(999)
+		)
+
+		require.True(t, give.IsSome())
+		require.True(t, have.IsSome())
+		require.Equal(t, 123, have.Value())
+		require.Equal(t, 999, give.Value())
+	})
+
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = give.Swap(999)
+		)
+
+		require.True(t, give.IsSome())
+		require.True(t, have.IsNone())
+		require.Equal(t, 999, give.Value())
+	})
+}
+
+func TestOptional_Value(t *testing.T) {
+	var opt optional.Optional[bool]
+	require.Panics(t, func() {
+		opt.Value()
+	})
+
+	opt = optional.Some(false)
+	require.NotPanics(t, func() {
+		require.False(t, opt.Value())
+	})
 }
 
 func TestOptional_ValueOr(t *testing.T) {
@@ -130,48 +342,95 @@ func TestOptional_ValueOrFunc(t *testing.T) {
 	require.Equal(t, 345, opt.ValueOrElse(func() int { return -1 }))
 }
 
-func TestOptional_Map(t *testing.T) {
-	t.Run("none", func(t *testing.T) {
-		var (
-			give = optional.None[int]()
-			have = give.Map(func(x int) int { return x * 2 })
-		)
-		require.False(t, have.HasValue())
-	})
-
+func TestMap(t *testing.T) {
 	t.Run("some", func(t *testing.T) {
 		var (
 			give = optional.Some(123)
-			have = give.Map(func(x int) int { return x * 2 })
+			have = optional.Map(give, func(v int) bool {
+				return v%2 == 0
+			})
 		)
-		require.True(t, have.HasValue())
-		require.Equal(t, give.Value()*2, have.Value())
-	})
-}
 
-func TestOptional_Filter(t *testing.T) {
+		require.True(t, have.IsSome())
+		require.False(t, have.Value())
+	})
+
 	t.Run("none", func(t *testing.T) {
 		var (
 			give = optional.None[int]()
-			have = give.Filter(func(x int) bool { return x > 0 })
+			have = optional.Map(give, func(v int) bool {
+				return v%2 == 0
+			})
 		)
-		require.False(t, have.HasValue())
-	})
 
-	t.Run("some predicate returns true", func(t *testing.T) {
+		require.True(t, have.IsNone())
+	})
+}
+
+func TestMapOr(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
 		var (
 			give = optional.Some(123)
-			have = give.Filter(func(x int) bool { return x > 0 })
+			have = optional.MapOr(give, true, func(v int) bool {
+				return v%2 == 0
+			})
 		)
-		require.True(t, have.HasValue())
-		require.Equal(t, give.Value(), have.Value())
+
+		require.False(t, have)
 	})
 
-	t.Run("some predicate returns false", func(t *testing.T) {
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = optional.MapOr(give, true, func(v int) bool {
+				return v%2 == 0
+			})
+		)
+
+		require.True(t, have)
+	})
+}
+
+func TestMapOrElse(t *testing.T) {
+	t.Run("some", func(t *testing.T) {
 		var (
 			give = optional.Some(123)
-			have = give.Filter(func(x int) bool { return x%2 == 0 })
+			have = optional.MapOrElse(
+				give,
+				func() bool { return true },
+				func(v int) bool { return v%2 == 0 },
+			)
 		)
-		require.False(t, have.HasValue())
+
+		require.False(t, have)
+	})
+
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = optional.MapOrElse(
+				give,
+				func() bool { return true },
+				func(v int) bool { return v%2 == 0 },
+			)
+		)
+
+		require.True(t, have)
+	})
+}
+
+func requireOptionalHasValue[T any](
+	t *testing.T,
+	want T,
+	maybe optional.Optional[T],
+) {
+	require.True(t, maybe.IsSome())
+	require.False(t, maybe.IsNone())
+
+	have, ok := maybe.Get()
+	require.True(t, ok)
+	require.Equal(t, want, have)
+	require.NotPanics(t, func() {
+		require.Equal(t, want, maybe.Value())
 	})
 }
