@@ -5,27 +5,33 @@ coverprofile := "cover.out"
 default:
     @just --list | grep -v default
 
-test PKG="./..." *ARGS="":
-    go test -race -failfast -count 1 -coverprofile {{ coverprofile }} {{ PKG }} {{ ARGS }}
+check:
+    mise run check
 
-vtest PKG="./..." *ARGS="": (test PKG ARGS "-v")
+cover: test
+    mise run cover
+
+fix:
+    mise run fix
+
+test:
+    mise run test
+
+vtest PKG="./..." *ARGS="":
+    go test -race -failfast -count 1 -coverprofile {{ coverprofile }} -v {{ PKG }} {{ ARGS }}
 
 tests PKG="./..." *ARGS="":
     gotestsum -f dots -- -v -race -failfast -count 1 -coverprofile {{ coverprofile }} {{ PKG }} {{ ARGS }}
 
-cover PKG="./...": (test PKG)
-    go tool cover -html {{ coverprofile }}
+alias bench := benchmark
 
-alias benchmark := bench
-
-bench PKG="./..." *ARGS="":
+benchmark PKG="./..." *ARGS="":
     go test -v -count 1 -run x -bench . {{ PKG }} {{ ARGS }}
 
 lint *PKGS="./...":
     golangci-lint run --new=false {{ PKGS }}
 
-mockgen:
-    command mockgen >/dev/null 2>&1 || go install github.com/golang/mock/mockgen@latest
+alias gen := generate
 
-generate PKG="./...": mockgen
+generate PKG="./...":
     go generate {{ PKG }}
