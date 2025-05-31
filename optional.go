@@ -61,6 +61,15 @@ func (o Optional[T]) Map(fn func(T) T) Optional[T] {
 	return None[T]()
 }
 
+// Filter returns a new [Optional] containing the held value if the given
+// predicate returns true. Otherwise, None() is returned.
+func (o Optional[T]) Filter(pred func(T) bool) Optional[T] {
+	if o.isset && pred(o.value) {
+		return o
+	}
+	return None[T]()
+}
+
 // Value returns the held value of type T, or panics if no value is held.
 func (o *Optional[T]) Value() T {
 	if !o.isset {

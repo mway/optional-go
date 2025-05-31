@@ -148,3 +148,30 @@ func TestOptional_Map(t *testing.T) {
 		require.Equal(t, give.Value()*2, have.Value())
 	})
 }
+
+func TestOptional_Filter(t *testing.T) {
+	t.Run("none", func(t *testing.T) {
+		var (
+			give = optional.None[int]()
+			have = give.Filter(func(x int) bool { return x > 0 })
+		)
+		require.False(t, have.HasValue())
+	})
+
+	t.Run("some predicate returns true", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.Filter(func(x int) bool { return x > 0 })
+		)
+		require.True(t, have.HasValue())
+		require.Equal(t, give.Value(), have.Value())
+	})
+
+	t.Run("some predicate returns false", func(t *testing.T) {
+		var (
+			give = optional.Some(123)
+			have = give.Filter(func(x int) bool { return x%2 == 0 })
+		)
+		require.False(t, have.HasValue())
+	})
+}
