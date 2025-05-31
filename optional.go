@@ -51,6 +51,16 @@ func (o *Optional[T]) HasValue() bool {
 	return o.isset
 }
 
+// Map applies the given function to the held value, if present, and returns a
+// new [Optional] containing the result. If no value is present, None() is
+// returned instead.
+func (o Optional[T]) Map(fn func(T) T) Optional[T] {
+	if o.isset {
+		return Some(fn(o.value))
+	}
+	return None[T]()
+}
+
 // Value returns the held value of type T, or panics if no value is held.
 func (o *Optional[T]) Value() T {
 	if !o.isset {
@@ -68,10 +78,10 @@ func (o *Optional[T]) ValueOr(fallback T) T {
 	return fallback
 }
 
-// ValueOrFunc returns a value of type T, either the held value or the result
+// ValueOrElse returns a value of type T, either the held value or the result
 // of fallback if no value is held. The given function is only evaluated if no
 // value is held.
-func (o *Optional[T]) ValueOrFunc(fallback func() T) T {
+func (o *Optional[T]) ValueOrElse(fallback func() T) T {
 	if o.isset {
 		return o.value
 	}
