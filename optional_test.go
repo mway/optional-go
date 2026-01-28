@@ -53,6 +53,45 @@ func TestNone(t *testing.T) {
 	})
 }
 
+func TestFromPointer(t *testing.T) {
+	t.Run("nil pointer", func(t *testing.T) {
+		var ptr *int
+		have := optional.FromPointer(ptr)
+		require.True(t, have.IsNone())
+	})
+
+	t.Run("non-nil pointer", func(t *testing.T) {
+		value := 123
+		have := optional.FromPointer(&value)
+		requireOptionalHasValue(t, value, have)
+	})
+
+	t.Run("zero value pointer", func(t *testing.T) {
+		value := 0
+		have := optional.FromPointer(&value)
+		requireOptionalHasValue(t, value, have)
+	})
+}
+
+func TestFromValue(t *testing.T) {
+	t.Run("zero value", func(t *testing.T) {
+		haveInt := optional.FromValue(0)
+		require.True(t, haveInt.IsNone())
+
+		haveString := optional.FromValue("")
+		require.True(t, haveString.IsNone())
+
+		haveBool := optional.FromValue(false)
+		require.True(t, haveBool.IsNone())
+	})
+
+	t.Run("non-zero value", func(t *testing.T) {
+		requireOptionalHasValue(t, 123, optional.FromValue(123))
+		requireOptionalHasValue(t, "foo", optional.FromValue("foo"))
+		requireOptionalHasValue(t, true, optional.FromValue(true))
+	})
+}
+
 func TestOptional_Filter(t *testing.T) {
 	t.Run("none", func(t *testing.T) {
 		var (
@@ -61,6 +100,14 @@ func TestOptional_Filter(t *testing.T) {
 		)
 		require.False(t, have.IsSome())
 		require.True(t, have.IsNone())
+	})
+
+	t.Run("none nil predicate", func(t *testing.T) {
+		opt := optional.None[int]()
+		require.NotPanics(t, func() {
+			have := opt.Filter(nil)
+			require.True(t, have.IsNone())
+		})
 	})
 
 	t.Run("some predicate returns true", func(t *testing.T) {
@@ -80,6 +127,13 @@ func TestOptional_Filter(t *testing.T) {
 		)
 		require.False(t, have.IsSome())
 		require.True(t, have.IsNone())
+	})
+
+	t.Run("nil predicate panics", func(t *testing.T) {
+		opt := optional.Some(123)
+		require.Panics(t, func() {
+			opt.Filter(nil)
+		})
 	})
 }
 
@@ -125,12 +179,18 @@ func TestOptional_IsNoneOr(t *testing.T) {
 		require.True(t, opt.IsNoneOr(func(x bool) bool {
 			return x
 		}))
+		require.Panics(t, func() {
+			opt.IsNoneOr(nil)
+		})
 	})
 
 	t.Run("none", func(t *testing.T) {
 		require.NotPanics(t, func() {
 			opt := optional.None[bool]()
 			require.True(t, opt.IsNoneOr(nil))
+		})
+		require.NotPanics(t, func() {
+			opt := optional.None[bool]()
 			require.True(t, opt.IsNoneOr(func(bool) bool {
 				panic("never called")
 			}))
@@ -195,6 +255,21 @@ func TestOptional_Map(t *testing.T) {
 		)
 		require.True(t, have.IsNone())
 	})
+
+	t.Run("nil mapper panics", func(t *testing.T) {
+		opt := optional.Some(123)
+		require.Panics(t, func() {
+			opt.Map(nil)
+		})
+	})
+
+	t.Run("none nil mapper", func(t *testing.T) {
+		opt := optional.None[int]()
+		require.NotPanics(t, func() {
+			have := opt.Map(nil)
+			require.True(t, have.IsNone())
+		})
+	})
 }
 
 func TestOptional_MapOr(t *testing.T) {
@@ -212,6 +287,20 @@ func TestOptional_MapOr(t *testing.T) {
 			have = give.MapOr(123, func(x int) int { return x * 2 })
 		)
 		require.Equal(t, 123, have)
+	})
+
+	t.Run("nil mapper panics", func(t *testing.T) {
+		opt := optional.Some(123)
+		require.Panics(t, func() {
+			opt.MapOr(0, nil)
+		})
+	})
+
+	t.Run("none nil mapper", func(t *testing.T) {
+		opt := optional.None[int]()
+		require.NotPanics(t, func() {
+			require.Equal(t, 123, opt.MapOr(123, nil))
+		})
 	})
 }
 
@@ -236,6 +325,29 @@ func TestOptional_MapOrElse(t *testing.T) {
 			)
 		)
 		require.Equal(t, 123, have)
+	})
+
+	t.Run("nil mapper panics", func(t *testing.T) {
+		opt := optional.Some(123)
+		require.Panics(t, func() {
+			opt.MapOrElse(func() int { return 0 }, nil)
+		})
+	})
+
+	t.Run("nil fallback panics", func(t *testing.T) {
+		opt := optional.None[int]()
+		require.Panics(t, func() {
+			opt.MapOrElse(nil, func(x int) int { return x * 2 })
+		})
+	})
+
+	t.Run("some nil fallback", func(t *testing.T) {
+		opt := optional.Some(123)
+		require.NotPanics(t, func() {
+			require.Equal(t, 246, opt.MapOrElse(nil, func(x int) int {
+				return x * 2
+			}))
+		})
 	})
 }
 
@@ -280,6 +392,21 @@ func TestOptional_OrElse(t *testing.T) {
 		)
 		require.True(t, have.IsSome())
 		require.Equal(t, 123, have.Value())
+	})
+
+	t.Run("nil fallback panics", func(t *testing.T) {
+		opt := optional.None[int]()
+		require.Panics(t, func() {
+			opt.OrElse(nil)
+		})
+	})
+
+	t.Run("some nil fallback", func(t *testing.T) {
+		opt := optional.Some(123)
+		require.NotPanics(t, func() {
+			have := opt.OrElse(nil)
+			require.Equal(t, 123, have.Value())
+		})
 	})
 }
 
@@ -340,6 +467,16 @@ func TestOptional_ValueOrFunc(t *testing.T) {
 
 	opt = optional.Some(345)
 	require.Equal(t, 345, opt.ValueOrElse(func() int { return -1 }))
+
+	require.Panics(t, func() {
+		opt = optional.None[int]()
+		opt.ValueOrElse(nil)
+	})
+
+	require.NotPanics(t, func() {
+		opt = optional.Some(345)
+		require.Equal(t, 345, opt.ValueOrElse(nil))
+	})
 }
 
 func TestMap(t *testing.T) {
@@ -365,6 +502,23 @@ func TestMap(t *testing.T) {
 
 		require.True(t, have.IsNone())
 	})
+
+	t.Run("nil mapper panics", func(t *testing.T) {
+		opt := optional.Some(123)
+		var mapper func(int) bool
+		require.Panics(t, func() {
+			optional.Map(opt, mapper)
+		})
+	})
+
+	t.Run("none nil mapper", func(t *testing.T) {
+		opt := optional.None[int]()
+		var mapper func(int) bool
+		require.NotPanics(t, func() {
+			have := optional.Map(opt, mapper)
+			require.True(t, have.IsNone())
+		})
+	})
 }
 
 func TestMapOr(t *testing.T) {
@@ -388,6 +542,22 @@ func TestMapOr(t *testing.T) {
 		)
 
 		require.True(t, have)
+	})
+
+	t.Run("nil mapper panics", func(t *testing.T) {
+		opt := optional.Some(123)
+		var mapper func(int) bool
+		require.Panics(t, func() {
+			optional.MapOr(opt, false, mapper)
+		})
+	})
+
+	t.Run("none nil mapper", func(t *testing.T) {
+		opt := optional.None[int]()
+		var mapper func(int) bool
+		require.NotPanics(t, func() {
+			require.True(t, optional.MapOr(opt, true, mapper))
+		})
 	})
 }
 
@@ -416,6 +586,38 @@ func TestMapOrElse(t *testing.T) {
 		)
 
 		require.True(t, have)
+	})
+
+	t.Run("nil mapper panics", func(t *testing.T) {
+		opt := optional.Some(123)
+		var mapper func(int) bool
+		require.Panics(t, func() {
+			optional.MapOrElse(opt, func() bool { return true }, mapper)
+		})
+	})
+
+	t.Run("nil fallback panics", func(t *testing.T) {
+		opt := optional.None[int]()
+		var fallback func() bool
+		require.Panics(t, func() {
+			optional.MapOrElse(
+				opt,
+				fallback,
+				func(v int) bool { return v%2 == 0 },
+			)
+		})
+	})
+
+	t.Run("some nil fallback", func(t *testing.T) {
+		opt := optional.Some(123)
+		var fallback func() bool
+		require.NotPanics(t, func() {
+			require.False(t, optional.MapOrElse(
+				opt,
+				fallback,
+				func(v int) bool { return v%2 == 0 },
+			))
+		})
 	})
 }
 
